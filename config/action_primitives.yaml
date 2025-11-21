@@ -1,0 +1,37 @@
+# Copyright (c) 2024 Idiap Research Institute, http://www.idiap.ch/
+# Written by Cem Bilaloglu <cem.bilaloglu@idiap.ch>
+
+# This file is part of diffused_fields_robotics.
+# Licensed under the MIT License. See LICENSE file in the project root.
+
+# Default parameters for all action primitives
+# These apply to all objects unless overridden in pointclouds.yaml or specific primitive configs
+
+defaults:
+  diffusion_scalar: 1000
+  distance_to_surface: -0.002 # easier to see if above surface
+  num_init_steps: 40 # offset from the keypoint
+  tool:
+    name: knife
+    scale: 0.01
+    center_vertex: 505
+
+slicing:
+  num_slicing_steps: 10
+  num_slide_steps: 10
+  tool:
+    orientation: [90, 0, -90]
+    scale: 0.01
+
+peeling:
+  num_peels: 3
+  num_slide_steps: 20
+  retract_distance_to_surface: -0.005 # safe distance after peel
+  tool:
+    scale: 0.005
+    orientation: [180, 0, 90]
+
+coverage:
+  source_vertices: []
+  num_radial_steps: 10
+  num_init_steps: 20

@@ -1,0 +1,23 @@
+# Copyright (c) 2024 Idiap Research Institute, http://www.idiap.ch/
+# Written by Cem Bilaloglu <cem.bilaloglu@idiap.ch>
+
+# This file is part of diffused_fields_robotics.
+# Licensed under the MIT License. See LICENSE file in the project root.
+
+# Object-specific parameter overrides
+# Only specify parameters that differ from action primitive defaults
+# Format: object_name -> primitive_type -> parameter_overrides
+
+
+banana_half:
+  slicing:
+    source_vertices: [56, 25]
+
+pear:
+  peeling:
+    source_vertices: [1271, 2190] 
+
+
+
+
+

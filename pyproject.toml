@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "diffused_fields_robotics"
+version = "0.1.0"
+description = "Diffused fields for robotics applications"
+authors = [{name = "Cem Bilaloglu", email = "cem.bilaloglu@idiap.ch"}]
+license = {text = "MIT"}
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "polyscope",
+    "pyyaml",
+    "stable-baselines3",
+    "diffused_fields>=0.1,<0.3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
