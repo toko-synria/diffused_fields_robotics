@@ -213,7 +213,9 @@ class pcloudActionPrimitives(object):
         project=False,
         distance_to_surface=0.0,
         terminal_condition=None,
+        log_fn=None,
     ):
+        _log = log_fn if log_fn is not None else print
         x_next = x0
         for _ in range(num_steps):
             if type(direction) == list:
@@ -222,7 +224,7 @@ class pcloudActionPrimitives(object):
 
                     self.x_arr.append(x_next)
                     self.trajectory_local_bases.append(local_basis)
-                    print(f"Step {_ + 1} of {num_steps}: {x_next}")
+                    _log(f"Step {_ + 1} of {num_steps}")
             else:
                 x_next, local_basis = self.local_step(x_next, direction, sign)
             if project:
@@ -232,7 +234,8 @@ class pcloudActionPrimitives(object):
             if terminal_condition is not None:
                 if terminal_condition(x_next, local_basis):
                     break
-            # print(f"Step {_ + 1} of {num_steps}: {x_next}")
+            if (_ + 1) % 10 == 0 or _ == num_steps - 1:
+                _log(f"Step {_ + 1} of {num_steps}")
             self.x_arr.append(x_next)
             self.trajectory_local_bases.append(local_basis)
 
@@ -954,14 +957,15 @@ class Peeling(pcloudActionPrimitives):
         self.force_list = []
         self.endpoint_tolerance_multiplier = 10.0
 
-    def run(self):
+    def run(self, log_fn=None):
+        _log = log_fn if log_fn is not None else print
         self.x_home = np.copy(self.x_arr[0])
 
         # Track ground truth transition indices
         self.transition_indices = []
 
         for _ in range(self.num_peels):
-            print(f"Performing peel {_ + 1} of {self.num_peels}")
+            _log(f"Performing peel {_ + 1} of {self.num_peels}")
             # Peeling movement in longitudinal direction
             self.move_multistep(
                 500,  # large number to ensure completion but will be cut by terminal condition
@@ -971,26 +975,31 @@ class Peeling(pcloudActionPrimitives):
                 project=True,
                 distance_to_surface=self.distance_to_surface,
                 terminal_condition=self.check_endpoint_reached,
+                log_fn=log_fn,
             )
             self.transition_indices.append(len(self.x_arr) - 1)
 
             # Lift the tool away from the surface
             lift_steps = int(-self.retract_distance_to_surface / self.step_size)
+            _log(f"Lifting tool ({lift_steps} steps)")
             self.move_multistep(
                 lift_steps,
                 self.x_arr[-1],
                 direction=2,  # tangential direction
                 sign=-1,
+                log_fn=log_fn,
             )
 
             self.transition_indices.append(len(self.x_arr) - 1)
 
             # Go to start point for next peeling cycle
-            self.return_home_safe(distance_to_surface=self.retract_distance_to_surface)
+            _log(f"Returning home")
+            self.return_home_safe(distance_to_surface=self.retract_distance_to_surface, log_fn=log_fn)
             self.transition_indices.append(len(self.x_arr) - 1)
-            print(f"Peeling period completed")
+            _log(f"Peeling period {_ + 1} completed")
 
             # Move sideways for offseting the next peel
+            _log(f"Sliding sideways ({self.num_slide_steps} steps)")
             self.move_multistep(
                 self.num_slide_steps,
                 self.x_arr[-1],
@@ -998,15 +1007,18 @@ class Peeling(pcloudActionPrimitives):
                 sign=-1,
                 project=True,
                 distance_to_surface=self.retract_distance_to_surface,
+                log_fn=log_fn,
             )
             self.transition_indices.append(len(self.x_arr) - 1)
 
             # Move back down to the surface
+            _log(f"Lowering tool ({lift_steps} steps)")
             self.move_multistep(
                 lift_steps,
                 self.x_arr[-1],
                 direction=2,  # tangential direction
                 sign=1,
+                log_fn=log_fn,
             )
             self.transition_indices.append(len(self.x_arr) - 1)
 
@@ -1015,7 +1027,8 @@ class Peeling(pcloudActionPrimitives):
         self.trajectory = np.array(self.x_arr)
         self.trajectory_local_bases = np.array(self.trajectory_local_bases)
 
-    def return_home_safe(self, distance_to_surface):
+    def return_home_safe(self, distance_to_surface, log_fn=None):
+        _log = log_fn if log_fn is not None else print
         local_basis_real = np.copy(self.pcloud.local_bases)
 
         u0 = np.zeros(len(self.pcloud.vertices))
@@ -1038,7 +1051,10 @@ class Peeling(pcloudActionPrimitives):
             geodesic_distance2home = geodesic_arr[0, projected_point]
 
             if geodesic_distance2home < 1e-2:
+                _log(f"Return home completed in {_ + 1} steps")
                 break
+            if (_ + 1) % 10 == 0:
+                _log(f"Return home step {_ + 1}, geodesic distance: {geodesic_distance2home:.4f}")
             x_start = np.copy(x_next)
             # Append the next position and basis
             self.x_arr.append(x_next)

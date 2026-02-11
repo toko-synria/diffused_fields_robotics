@@ -10,7 +10,7 @@
 defaults:
   diffusion_scalar: 1000
   distance_to_surface: -0.002 # easier to see if above surface
-  num_init_steps: 40 # offset from the keypoint
+  num_init_steps: 0 # offset from the keypoint (set to 0 to start directly from selected point)
   tool:
     name: knife
     scale: 0.01
@@ -24,8 +24,8 @@ slicing:
     scale: 0.01
 
 peeling:
-  num_peels: 3
-  num_slide_steps: 20
+  num_peels: 2
+  num_slide_steps: 5
   retract_distance_to_surface: -0.005 # safe distance after peel
   tool:
     scale: 0.005
