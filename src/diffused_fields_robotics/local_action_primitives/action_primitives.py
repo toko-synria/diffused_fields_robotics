@@ -1027,6 +1027,21 @@ class Peeling(pcloudActionPrimitives):
         self.trajectory = np.array(self.x_arr)
         self.trajectory_local_bases = np.array(self.trajectory_local_bases)
 
+        # Build phase labels from transition_indices
+        # Each peel cycle has 5 transitions: peel, lift, return, slide, lower
+        phase_names = ["peel", "lift", "return", "slide", "lower"]
+        self.phase_labels = [""] * len(self.trajectory)
+        prev_idx = 0
+        for i, t_idx in enumerate(self.transition_indices):
+            phase = phase_names[i % len(phase_names)]
+            for j in range(prev_idx, t_idx + 1):
+                self.phase_labels[j] = phase
+            prev_idx = t_idx + 1
+        # Label any remaining points with the last phase
+        if prev_idx < len(self.phase_labels):
+            for j in range(prev_idx, len(self.phase_labels)):
+                self.phase_labels[j] = phase_names[-1]
+
     def return_home_safe(self, distance_to_surface, log_fn=None):
         _log = log_fn if log_fn is not None else print
         local_basis_real = np.copy(self.pcloud.local_bases)

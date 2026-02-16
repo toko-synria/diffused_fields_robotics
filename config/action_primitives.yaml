@@ -24,7 +24,7 @@ slicing:
     scale: 0.01
 
 peeling:
-  num_peels: 2
+  num_peels: 1
   num_slide_steps: 5
   retract_distance_to_surface: -0.005 # safe distance after peel
   tool:
