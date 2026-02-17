@@ -24,9 +24,11 @@ slicing:
     scale: 0.01
 
 peeling:
-  num_peels: 1
+  num_peels: 4
   num_slide_steps: 5
   retract_distance_to_surface: -0.005 # safe distance after peel
+  start_pose_position: [0.242, -0.055, 0.291]
+  start_pose_quaternion: [0.984, -0.141, -0.086, -0.072]  # xyzw
   tool:
     scale: 0.005
     orientation: [180, 0, 90]

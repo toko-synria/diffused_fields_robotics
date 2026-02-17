@@ -221,10 +221,6 @@ class pcloudActionPrimitives(object):
             if type(direction) == list:
                 for dir, sgn in zip(direction, sign):
                     x_next, local_basis = self.local_step(x_next, dir, sgn)
-
-                    self.x_arr.append(x_next)
-                    self.trajectory_local_bases.append(local_basis)
-                    _log(f"Step {_ + 1} of {num_steps}")
             else:
                 x_next, local_basis = self.local_step(x_next, direction, sign)
             if project:
@@ -985,8 +981,8 @@ class Peeling(pcloudActionPrimitives):
             self.move_multistep(
                 lift_steps,
                 self.x_arr[-1],
-                direction=2,  # tangential direction
-                sign=-1,
+                direction=[0, 2],  # tangential direction
+                sign=[1, -1],
                 log_fn=log_fn,
             )
 
@@ -994,7 +990,9 @@ class Peeling(pcloudActionPrimitives):
 
             # Go to start point for next peeling cycle
             _log(f"Returning home")
-            self.return_home_safe(distance_to_surface=self.retract_distance_to_surface, log_fn=log_fn)
+            self.return_home_safe(
+                distance_to_surface=self.retract_distance_to_surface, log_fn=log_fn
+            )
             self.transition_indices.append(len(self.x_arr) - 1)
             _log(f"Peeling period {_ + 1} completed")
 
@@ -1069,7 +1067,9 @@ class Peeling(pcloudActionPrimitives):
                 _log(f"Return home completed in {_ + 1} steps")
                 break
             if (_ + 1) % 10 == 0:
-                _log(f"Return home step {_ + 1}, geodesic distance: {geodesic_distance2home:.4f}")
+                _log(
+                    f"Return home step {_ + 1}, geodesic distance: {geodesic_distance2home:.4f}"
+                )
             x_start = np.copy(x_next)
             # Append the next position and basis
             self.x_arr.append(x_next)
