@@ -881,7 +881,7 @@ class Coverage(pcloudActionPrimitives):
             self.loop_count = loop_idx + 1
 
             # Store this variables to check tangential loop completion
-            self.x_origin = self.x_arr[-1]  # Starting point of the current loop
+            self.x_origin = self.x_arr[-1]  # Starting point of thecurrent loop
             loop_start_idx = len(self.x_arr) - 1  # Track where this loop starts
 
             # Get reference local frame at loop start for angular tracking
@@ -989,9 +989,11 @@ class Peeling(pcloudActionPrimitives):
             self.transition_indices.append(len(self.x_arr) - 1)
 
             # Go to start point for next peeling cycle
-            _log(f"Returning home")
+            _log(f"Returning home (3x speed)")
             self.return_home_safe(
-                distance_to_surface=self.retract_distance_to_surface, log_fn=log_fn
+                distance_to_surface=self.retract_distance_to_surface,
+                speed_factor=2.0,
+                log_fn=log_fn,
             )
             self.transition_indices.append(len(self.x_arr) - 1)
             _log(f"Peeling period {_ + 1} completed")
@@ -1040,19 +1042,134 @@ class Peeling(pcloudActionPrimitives):
             for j in range(prev_idx, len(self.phase_labels)):
                 self.phase_labels[j] = phase_names[-1]
 
-    def return_home_safe(self, distance_to_surface, log_fn=None):
+    def run_symmetric(self, log_fn=None):
+        """Symmetric peeling: center first, then alternating +/- offsets.
+
+        Offset sequence: [0, +1, -1, +2, -2, ...] in units of num_slide_steps.
+        """
+        _log = log_fn if log_fn is not None else print
+        self.x_home = np.copy(self.x_arr[0])
+
+        # Precompute symmetric offsets: [0, +1, -1, +2, -2, ...]
+        offsets = [0]
+        for j in range(1, self.num_peels):
+            if j % 2 == 1:
+                offsets.append((j + 1) // 2)
+            else:
+                offsets.append(-(j // 2))
+        _log(f"Symmetric peel offsets: {offsets}")
+
+        self.transition_indices = []
+
+        for i in range(self.num_peels):
+            _log(f"Performing peel {i + 1} of {self.num_peels} (offset={offsets[i]})")
+
+            # Peeling movement in longitudinal direction
+            self.move_multistep(
+                500,
+                self.x_arr[-1],
+                direction=0,
+                sign=1,
+                project=True,
+                distance_to_surface=self.distance_to_surface,
+                terminal_condition=self.check_endpoint_reached,
+                log_fn=log_fn,
+            )
+            self.transition_indices.append(len(self.x_arr) - 1)
+
+            # Lift the tool away from the surface
+            lift_steps = int(-self.retract_distance_to_surface / self.step_size)
+            _log(f"Lifting tool ({lift_steps} steps)")
+            self.move_multistep(
+                lift_steps,
+                self.x_arr[-1],
+                direction=[0, 2],
+                sign=[1, -1],
+                log_fn=log_fn,
+            )
+            self.transition_indices.append(len(self.x_arr) - 1)
+
+            # Return to center (x_home stays as original center)
+            _log(f"Returning home (3x speed)")
+            self.return_home_safe(
+                distance_to_surface=self.retract_distance_to_surface,
+                speed_factor=3.0,
+                log_fn=log_fn,
+            )
+            self.transition_indices.append(len(self.x_arr) - 1)
+            _log(f"Peeling period {i + 1} completed")
+
+            # Slide + lower only if there's a next peel
+            if i < self.num_peels - 1:
+                # Slide is absolute from center (return_home_safe brings us back near center)
+                next_offset = offsets[i + 1]
+                slide_sign = 1 if next_offset > 0 else -1
+                slide_steps = abs(next_offset) * self.num_slide_steps
+
+                _log(
+                    f"Sliding to offset {next_offset} from center ({slide_steps} steps, sign={slide_sign})"
+                )
+                self.move_multistep(
+                    slide_steps,
+                    self.x_arr[-1],
+                    direction=1,
+                    sign=slide_sign,
+                    project=True,
+                    distance_to_surface=self.retract_distance_to_surface,
+                    log_fn=log_fn,
+                )
+                self.transition_indices.append(len(self.x_arr) - 1)
+
+                _log(f"Lowering tool ({lift_steps} steps)")
+                self.move_multistep(
+                    lift_steps,
+                    self.x_arr[-1],
+                    direction=2,
+                    sign=1,
+                    log_fn=log_fn,
+                )
+                self.transition_indices.append(len(self.x_arr) - 1)
+
+        self.trajectory = np.array(self.x_arr)
+        self.trajectory_local_bases = np.array(self.trajectory_local_bases)
+
+        # Build phase labels from transition_indices
+        # Full cycles have 5 transitions, last cycle has 3 (peel, lift, return)
+        phase_names = ["peel", "lift", "return", "slide", "lower"]
+        self.phase_labels = [""] * len(self.trajectory)
+        prev_idx = 0
+        for i, t_idx in enumerate(self.transition_indices):
+            phase = phase_names[i % len(phase_names)]
+            for j in range(prev_idx, t_idx + 1):
+                self.phase_labels[j] = phase
+            prev_idx = t_idx + 1
+        if prev_idx < len(self.phase_labels):
+            for j in range(prev_idx, len(self.phase_labels)):
+                self.phase_labels[j] = phase_names[-1]
+
+    def return_home_safe(self, distance_to_surface, speed_factor=1.0, log_fn=None):
         _log = log_fn if log_fn is not None else print
         local_basis_real = np.copy(self.pcloud.local_bases)
 
+        # Temporarily increase step size for faster return
+        original_step_size = self.step_size
+        self.step_size = self.step_size * speed_factor
+
         u0 = np.zeros(len(self.pcloud.vertices))
         _, target_vertex = self.pcloud.get_closest_points(self.x_home)
-        u0[self.source_vertices[0]] = 1
+        # u0[self.source_vertices[0]] = 1
+        u0[self.start_vertex] = 1
         geodesic_arr, geodesic_gradient_arr = (
             self.scalar_diffusion.precompute_geodesics_and_gradients(
-                [self.source_vertices[0]]
+                # [self.source_vertices[0]]
+                [self.start_vertex]
             )
         )
         self.ut = self.scalar_diffusion.integrate_diffusion(u0)
+        self.scalar_diffusion.get_gradient(geodesic_arr[0])
+        diffused_vectors = self.scalar_diffusion.gradient_ut_3d  #
+
+        self.pcloud.get_bases_from_tangent_vector_and_normal(diffused_vectors)
 
         x_start = np.copy(self.x_arr[-1])
         for _ in range(500):
@@ -1063,7 +1180,7 @@ class Peeling(pcloudActionPrimitives):
             )
             geodesic_distance2home = geodesic_arr[0, projected_point]
 
-            if geodesic_distance2home < 1e-2:
+            if geodesic_distance2home < 3e-3:
                 _log(f"Return home completed in {_ + 1} steps")
                 break
             if (_ + 1) % 10 == 0:
@@ -1074,7 +1191,6 @@ class Peeling(pcloudActionPrimitives):
             # Append the next position and basis
             self.x_arr.append(x_next)
 
-            self.pcloud.local_bases = local_basis_real
             # Get batch points for diffusion
             batch_points = self.wos.get_batch_from_point(x_next)
             # Compute local bases using diffusion
@@ -1082,4 +1198,5 @@ class Peeling(pcloudActionPrimitives):
 
             self.trajectory_local_bases.append(local_basis)
 
+        self.step_size = original_step_size
         self.pcloud.local_bases = local_basis_real
